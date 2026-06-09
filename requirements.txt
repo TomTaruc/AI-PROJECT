@@ -1,0 +1,7 @@
+pdfplumber
+python-docx
+pandas
+openpyxl
+beautifulsoup4
+lxml
+sentence-transformers

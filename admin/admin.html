@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DOLPHI Admin</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+.admin-layout { display: flex; height: 100vh; }
+.admin-sidebar { width: 260px; min-width: 260px; background: #1A3A5C; display: flex; flex-direction: column; overflow-y: auto; }
+.sidebar-header { padding: 24px 20px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+.sidebar-title { color: white; font-size: 16px; font-weight: 700; letter-spacing: 0.05em; }
+.sidebar-subtitle { color: #F5C518; font-size: 10px; letter-spacing: 0.1em; margin-top: 4px; }
+.sidebar-user { color: white; font-size: 13px; margin-top: 16px; }
+.sidebar-logout { color: #F5C518; font-size: 13px; margin-left: 12px; text-decoration: none; }
+.sidebar-logout:hover { text-decoration: underline; }
+.sidebar-nav { padding: 12px 0; flex: 1; }
+.nav-item { padding: 14px 20px; cursor: pointer; font-size: 14px; color: rgba(255,255,255,0.7); border-left: 3px solid transparent; transition: all 0.15s ease; user-select: none; }
+.nav-item:hover { background: rgba(255,255,255,0.08); color: white; }
+.nav-item.active { background: rgba(255,255,255,0.12); color: white; border-left: 3px solid #F5C518; font-weight: 600; }
+.admin-main { flex: 1; overflow-y: auto; padding: 32px; background: #F8FAFC; }
+.admin-section { display: none; }
+.admin-section.visible { display: block; }
+.section-title { font-size: 20px; font-weight: 700; color: #1A3A5C; margin-bottom: 24px; }
+.stat-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; max-width: 800px; margin-bottom: 32px; }
+.stat-card { background: white; border: 1px solid #E2E8F0; border-radius: 8px; padding: 24px; }
+.stat-number { font-size: 32px; font-weight: 700; color: #1A3A5C; }
+.stat-label { font-size: 13px; color: #94A3B8; margin-top: 6px; }
+.btn { padding: 8px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; letter-spacing: 0.03em; }
+.btn-primary { background: #1A3A5C; color: white; }
+.btn-primary:hover { background: #F5C518; color: #1A3A5C; }
+.btn-warning { background: #F5C518; color: #1A3A5C; }
+.btn-danger { background: #DC2626; color: white; }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.data-table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; border: 1px solid #E2E8F0; }
+.data-table th { background: #F1F5F9; color: #64748B; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; padding: 12px 16px; text-align: left; border-bottom: 1px solid #E2E8F0; }
+.data-table td { padding: 12px 16px; font-size: 13px; color: #1A3A5C; border-bottom: 1px solid #F1F5F9; vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #F8FAFC; }
+.badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+.badge-admin { background: #1A3A5C; color: white; }
+.badge-user { background: #E2E8F0; color: #64748B; }
+.badge-active { background: #DCFCE7; color: #16A34A; }
+.badge-inactive { background: #FEE2E2; color: #DC2626; }
+.badge-pending { background: #FEF9C3; color: #CA8A04; }
+.badge-resolved { background: #DCFCE7; color: #16A34A; }
+.inline-panel { background: #F8FAFC; border-top: 2px solid #F5C518; padding: 16px; display: none; }
+.inline-panel.open { display: table-row; }
+.loading-state { text-align: center; padding: 40px; color: #94A3B8; font-size: 14px; }
+.error-state { text-align: center; padding: 40px; color: #DC2626; font-size: 14px; }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 16px; }
+.filter-btn { padding: 6px 16px; border-radius: 20px; border: 1px solid #E2E8F0; background: white; color: #64748B; font-size: 13px; cursor: pointer; }
+.filter-btn.active { background: #1A3A5C; color: white; border-color: #1A3A5C; }
+.search-input { width: 100%; max-width: 360px; padding: 8px 14px; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 13px; color: #1A3A5C; margin-bottom: 16px; }
+.search-input:focus { outline: none; border-color: #1A3A5C; }
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 12px; font-weight: 600; color: #1A3A5C; margin-bottom: 6px; }
+.form-input { width: 100%; padding: 9px 12px; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 13px; color: #1A3A5C; }
+.form-input:focus { outline: none; border: 2px solid #1A3A5C; }
+.form-select { width: 100%; padding: 9px 12px; border: 1px solid #E2E8F0; border-radius: 6px; font-size: 13px; color: #1A3A5C; background: white; }
+.card { background: white; border: 1px solid #E2E8F0; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+.card-title { font-size: 15px; font-weight: 700; color: #1A3A5C; margin-bottom: 16px; }
+.status-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #F1F5F9; }
+.status-row:last-child { border-bottom: none; }
+.status-label { font-size: 13px; color: #94A3B8; }
+.status-value { font-size: 13px; font-weight: 600; color: #1A3A5C; }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+.dot-green { background: #16A34A; }
+.dot-red { background: #DC2626; }
+.dot-yellow { background: #F5C518; }
+.transcript { max-height: 300px; overflow-y: auto; background: #F8FAFC; border-radius: 6px; padding: 12px; margin-top: 8px; }
+.transcript-msg { margin-bottom: 10px; }
+.transcript-role { font-size: 11px; font-weight: 700; color: #94A3B8; margin-bottom: 2px; }
+.transcript-content { font-size: 13px; color: #1A3A5C; line-height: 1.5; }
+.transcript-time { font-size: 11px; color: #CBD5E1; margin-top: 2px; }
+.upload-area { border: 2px dashed #CBD5E1; border-radius: 8px; padding: 32px; text-align: center; cursor: pointer; margin-bottom: 16px; transition: border-color 0.15s; }
+.upload-area:hover { border-color: #F5C518; }
+.upload-area-text { font-size: 14px; color: #94A3B8; }
+.file-list { margin-bottom: 12px; min-height: 0; }
+.file-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; background: #F1F5F9; border-radius: 4px; margin-bottom: 4px; font-size: 13px; color: #1A3A5C; }
+.file-remove { background: none; border: none; color: #94A3B8; cursor: pointer; font-size: 16px; font-weight: bold; padding: 0 4px; }
+.file-remove:hover { color: #DC2626; }
+.pagination { display: flex; gap: 8px; align-items: center; margin-top: 16px; }
+.success-msg { color: #16A34A; font-size: 13px; padding: 8px 0; }
+.warning-msg { color: #CA8A04; font-size: 13px; padding: 8px 0; }
+</style>
+</head>
+<body>
+<div class="admin-layout">
+  <div class="admin-sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">DOLPHI ADMIN</div>
+      <div class="sidebar-subtitle">HYBRID RAG SERVICE ENGINE</div>
+      <div class="sidebar-user">Administrator <a href="/logout" class="sidebar-logout">Logout</a></div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-item" data-section="dashboard">Dashboard</div>
+      <div class="nav-item" data-section="users">Users</div>
+      <div class="nav-item" data-section="knowledge-base">Knowledge Base</div>
+      <div class="nav-item" data-section="conversations">Conversations</div>
+      <div class="nav-item" data-section="handoff-queue">Handoff Queue</div>
+      <div class="nav-item" data-section="feedback">Feedback</div>
+      <div class="nav-item" data-section="settings">Settings</div>
+    </nav>
+  </div>
+  <div class="admin-main">
+    <div id="dashboard" class="admin-section">
+      <h2 class="section-title">Dashboard</h2>
+      <div id="dashboard-content" class="section-content"></div>
+    </div>
+    <div id="users" class="admin-section">
+      <h2 class="section-title">Users</h2>
+      <div id="users-content" class="section-content"></div>
+    </div>
+    <div id="knowledge-base" class="admin-section">
+      <h2 class="section-title">Knowledge Base</h2>
+      <div id="knowledge-base-content" class="section-content"></div>
+    </div>
+    <div id="conversations" class="admin-section">
+      <h2 class="section-title">Conversations</h2>
+      <div id="conversations-content" class="section-content"></div>
+    </div>
+    <div id="handoff-queue" class="admin-section">
+      <h2 class="section-title">Handoff Queue</h2>
+      <div id="handoff-queue-content" class="section-content"></div>
+    </div>
+    <div id="feedback" class="admin-section">
+      <h2 class="section-title">Feedback</h2>
+      <div id="feedback-content" class="section-content"></div>
+    </div>
+    <div id="settings" class="admin-section">
+      <h2 class="section-title">Settings</h2>
+      <div id="settings-content" class="section-content"></div>
+    </div>
+  </div>
+</div>
+<script>
+(function() {
+    function initAdmin() {
+        console.log('DOLPHI ADMIN: Init running');
+
+        let currentSection = 'dashboard';
+        let handoffInterval = null;
+        let allFeedback = [];
+        let allHandoffs = [];
+        let conversationsPage = 1;
+        let pendingFiles = [];
+
+        // NAV SETUP
+        const navItems = document.querySelectorAll('.nav-item');
+        console.log('DOLPHI ADMIN: Found ' + navItems.length + ' nav items');
+
+        document.querySelector('.sidebar-nav').addEventListener('click', function(e) {
+            const item = e.target.closest('.nav-item');
+            if (!item) return;
+            const section = item.getAttribute('data-section');
+            if (section) {
+                console.log('DOLPHI ADMIN: Clicked ' + section);
+                switchSection(section);
+            }
+        });
+
+        function switchSection(sectionId) {
+            console.log('DOLPHI ADMIN: Switching to ' + sectionId);
+            if (handoffInterval) { clearInterval(handoffInterval); handoffInterval = null; }
+            document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
+            const activeNav = document.querySelector('.nav-item[data-section="' + sectionId + '"]');
+            if (activeNav) activeNav.classList.add('active');
+            
+            document.querySelectorAll('.admin-section').forEach(function(s) { s.classList.remove('visible'); });
+            const target = document.getElementById(sectionId);
+            if (target) { target.classList.add('visible'); } else { console.error('DOLPHI ADMIN: Section not found: ' + sectionId); }
+            currentSection = sectionId;
+            const loaders = { dashboard: loadDashboard, users: loadUsers, 'knowledge-base': loadKnowledgeBase, conversations: loadConversations, 'handoff-queue': loadHandoffQueue, feedback: loadFeedback, settings: loadSettings };
+            if (loaders[sectionId]) loaders[sectionId]();
+        }
+
+        // FETCH WRAPPER
+        function adminFetch(url, options) {
+            const opts = Object.assign({ credentials: 'include' }, options || {});
+            if (!(opts.body instanceof FormData)) {
+                opts.headers = Object.assign({ 'Content-Type': 'application/json' }, opts.headers || {});
+            }
+            return fetch(url, opts).then(function(r) {
+                if (r.status === 401) { window.location.href = '/admin/login'; throw new Error('Unauthorized'); }
+                if (!r.ok) return r.json().catch(function() { return {}; }).then(function(e) { throw new Error((e.error || e.message || 'HTTP ' + r.status)); });
+                return r.json();
+            });
+        }
+
+        function setContent(sectionId, html) {
+            const el = document.getElementById(sectionId + '-content');
+            if (el) el.innerHTML = html;
+        }
+
+        function showLoading(sectionId) { setContent(sectionId, '<div class="loading-state">Loading...</div>'); }
+        function showError(sectionId, msg) { setContent(sectionId, '<div class="error-state">' + msg + '<br><br><button class="btn btn-primary btn-sm" onclick="retrySection()">Retry</button></div>'); }
+
+        window.retrySection = function() {
+            const loaders = { dashboard: loadDashboard, users: loadUsers, 'knowledge-base': loadKnowledgeBase, conversations: loadConversations, 'handoff-queue': loadHandoffQueue, feedback: loadFeedback, settings: loadSettings };
+            if (loaders[currentSection]) loaders[currentSection]();
+        };
+
+        function loadDashboard() {
+            showLoading('dashboard');
+            adminFetch('/api/admin/stats').then(function(data) {
+                const html = '<div class="stat-grid">' +
+                    '<div class="stat-card"><div class="stat-number">' + (data.total_messages_today || 0) + '</div><div class="stat-label">Messages Today</div></div>' +
+                    '<div class="stat-card"><div class="stat-number">' + (data.total_sessions || 0) + '</div><div class="stat-label">Total Sessions</div></div>' +
+                    '<div class="stat-card"><div class="stat-number">' + (data.average_confidence || 0) + '%</div><div class="stat-label">Avg Confidence</div></div>' +
+                    '<div class="stat-card"><div class="stat-number">' + (data.escalation_rate || 0) + '%</div><div class="stat-label">Escalation Rate</div></div>' +
+                '</div>';
+                setContent('dashboard', html);
+            }).catch(function(err) {
+                showError('dashboard', err.message);
+            });
+        }
+
+        function loadUsers() {
+            showLoading('users');
+            adminFetch('/api/admin/users').then(function(users) {
+                let html = '<button id="create-user-btn" class="btn btn-primary" style="margin-bottom: 20px;">CREATE USER</button>' +
+                '<div id="create-user-form" class="card" style="display: none; max-width: 500px;">' +
+                  '<h3 class="card-title">Create New User</h3>' +
+                  '<div class="form-group">' +
+                    '<label class="form-label">Username</label>' +
+                    '<input type="text" id="new-user-username" class="form-input">' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label class="form-label">Email</label>' +
+                    '<input type="email" id="new-user-email" class="form-input">' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label class="form-label">Password</label>' +
+                    '<input type="password" id="new-user-password" class="form-input">' +
+                  '</div>' +
+                  '<div class="form-group">' +
+                    '<label class="form-label">Role</label>' +
+                    '<select id="new-user-role" class="form-select">' +
+                      '<option value="user">User</option>' +
+                      '<option value="admin">Admin</option>' +
+                    '</select>' +
+                  '</div>' +
+                  '<button id="save-new-user" class="btn btn-primary">SAVE</button> ' +
+                  '<button id="cancel-new-user" class="btn btn-warning">CANCEL</button>' +
+                '</div>' +
+                '<table class="data-table"><thead><tr><th>ID</th><th>Username</th><th>Email</th><th>Role</th><th>Status</th><th>Last Login</th><th>Actions</th></tr></thead><tbody id="users-tbody">';
+                users.forEach(function(u) {
+                    const login = u.last_login ? new Date(u.last_login).toLocaleString() : 'Never';
+                    const sBadge = u.is_active ? '<span class="badge badge-active">Active</span>' : '<span class="badge badge-inactive">Inactive</span>';
+                    const rBadge = u.role === 'admin' ? '<span class="badge badge-admin">Admin</span>' : '<span class="badge badge-user">User</span>';
+                    const toggleBtn = u.is_active ? '<button class="btn btn-sm btn-danger user-deactivate-btn" data-userid="'+u.id+'">Deactivate</button>' : '<button class="btn btn-sm btn-primary user-deactivate-btn" data-userid="'+u.id+'">Activate</button>';
+                    html += '<tr data-userid="'+u.id+'"><td>'+u.id+'</td><td>'+u.username+'</td><td>'+(u.email||'')+'</td><td>'+rBadge+'</td><td class="status-cell">'+sBadge+'</td><td>'+login+'</td><td>'+
+                        '<button class="btn btn-sm btn-primary user-edit-btn" data-userid="'+u.id+'" style="margin-right:4px;">Edit Role</button>' +
+                        toggleBtn + '</td></tr>';
+                });
+                html += '</tbody></table>';
+                setContent('users', html);
+
+                document.getElementById('create-user-btn').addEventListener('click', function() {
+                    const form = document.getElementById('create-user-form');
+                    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+                });
+                document.getElementById('cancel-new-user').addEventListener('click', function() {
+                    document.getElementById('create-user-form').style.display = 'none';
+                });
+                document.getElementById('save-new-user').addEventListener('click', function() {
+                    const username = document.getElementById('new-user-username').value;
+                    const email = document.getElementById('new-user-email').value;
+                    const password = document.getElementById('new-user-password').value;
+                    adminFetch('/api/admin/users/create', { method: 'POST', body: JSON.stringify({username: username, email: email, password: password}) })
+                    .then(function() { loadUsers(); })
+                    .catch(function(err) { alert(err.message); });
+                });
+            }).catch(function(err) { showError('users', err.message); });
+        }
+
+        document.getElementById('users-content').addEventListener('click', function(e) {
+            const deactivateBtn = e.target.closest('.user-deactivate-btn');
+            if (deactivateBtn) {
+                const uid = deactivateBtn.dataset.userid;
+                adminFetch('/api/admin/users/'+uid+'/deactivate', { method:'PATCH' })
+                .then(function() { loadUsers(); })
+                .catch(function(err) { alert(err.message); });
+            }
+            const editBtn = e.target.closest('.user-edit-btn');
+            if (editBtn) {
+                const uid = editBtn.dataset.userid;
+                const newRole = prompt("Enter new role: 'user' or 'admin'");
+                if (newRole && (newRole === 'user' || newRole === 'admin')) {
+                    adminFetch('/api/admin/users/'+uid, { method:'PATCH', body: JSON.stringify({role: newRole}) })
+                    .then(function() { loadUsers(); })
+                    .catch(function(err) { alert(err.message); });
+                }
+            }
+        });
+
+        function loadKnowledgeBase() {
+            showLoading('knowledge-base');
+            adminFetch('/api/documents').then(function(docs) {
+                let html = '<div class="card" style="max-width:600px;">' +
+                  '<h3 class="card-title">Upload Documents</h3>' +
+                  '<div class="upload-area" id="kb-upload-area">' +
+                    '<div class="upload-area-text">Click to select files</div>' +
+                    '<input type="file" id="kb-file-input" multiple style="display:none">' +
+                  '</div>' +
+                  '<div id="kb-file-list" class="file-list"></div>' +
+                  '<button id="kb-ingest-btn" class="btn btn-primary">Ingest Documents</button>' +
+                '</div>';
+
+                html += '<div class="card" style="max-width:600px;"><h3 class="card-title">Pipeline Status</h3><div id="kb-pipeline-status">Loading...</div></div>';
+
+                html += '<table class="data-table"><thead><tr><th>ID</th><th>Filename</th><th>Status</th><th>Chunks</th><th>Created</th><th>Actions</th></tr></thead><tbody id="kb-tbody">';
+                docs.forEach(function(d) {
+                    html += '<tr><td>'+d.id+'</td><td>'+d.filename+'</td><td><span class="badge badge-active">'+d.status+'</span></td><td>'+(d.total_chunks||0)+'</td><td>'+new Date(d.created_at).toLocaleString()+'</td><td><button class="btn btn-sm btn-danger kb-del-btn" data-docid="'+d.id+'">Delete</button></td></tr>';
+                });
+                html += '</tbody></table>';
+                setContent('knowledge-base', html);
+
+                document.getElementById('kb-upload-area').addEventListener('click', function() { document.getElementById('kb-file-input').click(); });
+                document.getElementById('kb-file-input').addEventListener('change', function(e) {
+                    Array.from(e.target.files).forEach(function(f) { pendingFiles.push(f); });
+                    renderKbFileList();
+                    e.target.value = '';
+                });
+                document.getElementById('kb-file-list').addEventListener('click', function(e) {
+                    if (e.target.classList.contains('file-remove')) {
+                        const idx = parseInt(e.target.dataset.idx, 10);
+                        pendingFiles.splice(idx, 1);
+                        renderKbFileList();
+                    }
+                });
+                document.getElementById('kb-ingest-btn').addEventListener('click', function() {
+                    if (pendingFiles.length === 0) return;
+                    const fd = new FormData();
+                    pendingFiles.forEach(function(f) { fd.append('documents', f); });
+                    const btn = document.getElementById('kb-ingest-btn');
+                    btn.disabled = true;
+                    btn.innerText = 'Uploading...';
+                    adminFetch('/api/upload-document', { method: 'POST', body: fd, headers: {} })
+                    .then(function() { pendingFiles = []; loadKnowledgeBase(); })
+                    .catch(function(err) { alert(err.message); btn.disabled = false; btn.innerText = 'Ingest Documents'; });
+                });
+
+                adminFetch('/api/admin/pipeline-status').then(function(sts) {
+                    const phtml = '<div class="status-row"><span class="status-label">Total Documents</span><span class="status-value">'+(sts.total_documents||sts.documents||0)+'</span></div>' +
+                                '<div class="status-row"><span class="status-label">Total Chunks</span><span class="status-value">'+(sts.total_chunks||sts.chunks||0)+'</span></div>' +
+                                '<button id="kb-rebuild-btn" class="btn btn-warning mt-3" style="width:100%; margin-top:16px;">Rebuild Index</button>';
+                    document.getElementById('kb-pipeline-status').innerHTML = phtml;
+                    document.getElementById('kb-rebuild-btn').addEventListener('click', function() {
+                        adminFetch('/api/admin/rebuild-index', { method:'POST' }).then(function() { alert('Rebuild queued/started'); loadKnowledgeBase(); });
+                    });
+                });
+
+            }).catch(function(err) { showError('knowledge-base', err.message); });
+        }
+
+        function renderKbFileList() {
+            let h = '';
+            pendingFiles.forEach(function(f, i) {
+                h += '<div class="file-item"><span>'+f.name+'</span><button class="file-remove" data-idx="'+i+'">×</button></div>';
+            });
+            document.getElementById('kb-file-list').innerHTML = h;
+        }
+
+        document.getElementById('knowledge-base-content').addEventListener('click', function(e) {
+            if (e.target.classList.contains('kb-del-btn')) {
+                const did = e.target.dataset.docid;
+                if(confirm('Delete document?')) {
+                    adminFetch('/api/documents/'+did, { method:'DELETE' })
+                    .then(function() { loadKnowledgeBase(); })
+                    .catch(function(err) { alert(err.message); });
+                }
+            }
+        });
+
+        function loadConversations() {
+            showLoading('conversations');
+            adminFetch('/api/admin/conversations?page=' + conversationsPage + '&per_page=20').then(function(sessions) {
+                let html = '<table class="data-table"><thead><tr><th>Session ID</th><th>Last Activity</th><th>Actions</th></tr></thead><tbody>';
+                sessions.forEach(function(s) {
+                    html += '<tr><td>'+s.session_token+'</td><td>'+new Date(s.last_activity||s.started_at).toLocaleString()+'</td><td><button class="btn btn-sm btn-primary conv-view-btn" data-sess="'+s.session_token+'">VIEW</button></td></tr>';
+                    html += '<tr id="trx-'+s.session_token+'" class="inline-panel"><td colspan="3"><div class="transcript" id="tr-'+s.session_token+'">Loading...</div></td></tr>';
+                });
+                html += '</tbody></table>';
+                html += '<div class="pagination"><button class="btn btn-sm" id="conv-prev">Prev</button> <span style="font-size:13px; font-weight:600;">Page '+conversationsPage+'</span> <button class="btn btn-sm" id="conv-next">Next</button></div>';
+                setContent('conversations', html);
+
+                document.getElementById('conv-prev').addEventListener('click', function() { if(conversationsPage>1) { conversationsPage--; loadConversations(); } });
+                document.getElementById('conv-next').addEventListener('click', function() { conversationsPage++; loadConversations(); });
+            }).catch(function(err) { showError('conversations', err.message); });
+        }
+
+        document.getElementById('conversations-content').addEventListener('click', function(e) {
+            if (e.target.classList.contains('conv-view-btn')) {
+                const sess = e.target.dataset.sess;
+                const panel = document.getElementById('trx-'+sess);
+                if(panel.classList.contains('open')) { panel.classList.remove('open'); return; }
+                panel.classList.add('open');
+                adminFetch('/api/admin/conversations/'+sess+'/messages').then(function(msgs) {
+                    let mhtml = '';
+                    msgs.forEach(function(m) {
+                        mhtml += '<div class="transcript-msg"><div class="transcript-role">'+(m.role==='user'?'User':'Bot')+'</div><div class="transcript-content">'+m.content+'</div></div>';
+                    });
+                    document.getElementById('tr-'+sess).innerHTML = mhtml || 'No messages';
+                });
+            }
+        });
+
+        function loadHandoffQueue() {
+            if (currentSection !== 'handoff-queue') return;
+            if(!document.getElementById('handoff-queue-content').querySelector('.data-table')) showLoading('handoff-queue');
+            
+            adminFetch('/api/admin/handoffs').then(function(data) {
+                allHandoffs = data;
+                let html = '<table class="data-table"><thead><tr><th>ID</th><th>Session ID</th><th>Status</th><th>Time</th><th>Actions</th></tr></thead><tbody>';
+                allHandoffs.forEach(function(h) {
+                    const statusBadge = h.status === 'resolved' ? '<span class="badge badge-resolved">Resolved</span>' : '<span class="badge badge-pending">Pending</span>';
+                    const resolveBtn = h.status === 'pending' ? '<button class="btn btn-sm btn-primary handoff-res-btn" data-hid="'+h.id+'">RESOLVE</button> ' : '';
+                    html += '<tr><td>'+h.id+'</td><td>'+h.session_id+'</td><td>'+statusBadge+'</td><td>'+new Date(h.triggered_at).toLocaleString()+'</td><td>'+resolveBtn+'<button class="btn btn-sm btn-warning conv-view-btn" data-sess="'+h.session_id+'">VIEW CHAT</button></td></tr>';
+                });
+                html += '</tbody></table>';
+                setContent('handoff-queue', html);
+
+                if (!handoffInterval && currentSection === 'handoff-queue') handoffInterval = setInterval(loadHandoffQueue, 30000);
+
+            }).catch(function(err) { showError('handoff-queue', err.message); });
+        }
+
+        document.getElementById('handoff-queue-content').addEventListener('click', function(e) {
+            if (e.target.classList.contains('handoff-res-btn')) {
+                adminFetch('/api/admin/handoff/'+e.target.dataset.hid, { method:'PATCH', body: JSON.stringify({status:'resolved'}) })
+                .then(loadHandoffQueue);
+            }
+            if (e.target.classList.contains('conv-view-btn')) {
+                switchSection('conversations');
+            }
+        });
+
+        function loadFeedback() {
+            showLoading('feedback');
+            adminFetch('/api/admin/feedback').then(function(f) {
+                allFeedback = f;
+                let html = '<div class="filter-bar"><button class="filter-btn active" data-filter="all">All</button><button class="filter-btn" data-filter="up">Thumbs Up</button><button class="filter-btn" data-filter="down">Thumbs Down</button></div>';
+                html += '<table class="data-table"><thead><tr><th>Session</th><th>Rating</th><th>Message</th><th>Time</th></tr></thead><tbody id="feedback-tbody"></tbody></table>';
+                setContent('feedback', html);
+                renderFeedbackTable(allFeedback);
+                
+                document.querySelectorAll('#feedback-content .filter-btn').forEach(function(b) {
+                    b.addEventListener('click', function() {
+                        document.querySelectorAll('#feedback-content .filter-btn').forEach(function(bb) { bb.classList.remove('active'); });
+                        this.classList.add('active');
+                        const filter = this.dataset.filter;
+                        if (filter === 'all') renderFeedbackTable(allFeedback);
+                        else if (filter === 'up') renderFeedbackTable(allFeedback.filter(function(ff) { return ff.rating === 1; }));
+                        else if (filter === 'down') renderFeedbackTable(allFeedback.filter(function(ff) { return ff.rating === -1; }));
+                    });
+                });
+            }).catch(function(err) { showError('feedback', err.message); });
+        }
+
+        function renderFeedbackTable(items) {
+            const tbody = document.getElementById('feedback-tbody');
+            if(!tbody) return;
+            let h = '';
+            items.forEach(function(i) {
+                const icon = i.rating === 1 ? '👍' : '👎';
+                h += '<tr><td>'+i.session_id+'</td><td>'+icon+'</td><td>'+(i.message_content||i.message||'--')+'</td><td>'+new Date(i.created_at).toLocaleString()+'</td></tr>';
+            });
+            tbody.innerHTML = h;
+        }
+
+        function loadSettings() {
+            showLoading('settings');
+            adminFetch('/api/admin/settings').then(function(s) {
+                const html = '<div class="card" style="max-width:500px;"><h3 class="card-title">System Settings</h3>' +
+                           '<div class="form-group"><label class="form-label">Base URL</label><input type="text" class="form-input" disabled value="'+(s.base_url || s.url || '')+'"></div>' +
+                           '<div class="form-group"><label class="form-label">Access Code (Masked)</label><input type="text" class="form-input" disabled value="'+(s.adminAccessCode || s.masked_access_code || '')+'"></div>' +
+                           '</div>';
+                setContent('settings', html);
+            }).catch(function(err) { showError('settings', err.message); });
+        }
+
+        switchSection('dashboard');
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initAdmin);
+    } else {
+        initAdmin();
+    }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+app.get('/api/admin/stats', require_admin, async (req, res) => {
+  try {
+    const msgsTodayRes = await db.query("SELECT COUNT(*) as count FROM messages WHERE DATE(timestamp) = CURRENT_DATE");
+    const totalMessagesToday = parseInt(msgsTodayRes.rows[0].count, 10);
+    
+    const sessRes = await db.query("SELECT COUNT(DISTINCT session_id) as count FROM conversations");
+    const totalSessions = parseInt(sessRes.rows[0].count, 10);
+    
+    const confRes = await db.query("SELECT COALESCE(AVG(retrieval_confidence), 0) as avg_conf FROM messages WHERE retrieval_confidence IS NOT NULL AND retrieval_confidence > 0");
+    const averageConfidence = parseFloat(confRes.rows[0].avg_conf) * 100;
+    
+    const escRes = await db.query("SELECT COUNT(*) as count FROM messages WHERE escalated = true");
+    const escCount = parseInt(escRes.rows[0].count, 10);
+    
+    const totalAssisRes = await db.query("SELECT COUNT(*) as count FROM messages");
+    const totalAssis = parseInt(totalAssisRes.rows[0].count, 10);
+    const escalationRate = totalAssis > 0 ? (escCount / totalAssis) * 100 : 0;
+
+    res.json({
+      total_messages_today: totalMessagesToday,
+      total_sessions: totalSessions,
+      average_confidence: parseFloat(averageConfidence.toFixed(1)),
+      escalation_rate: parseFloat(escalationRate.toFixed(1))
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/admin/conversations', require_admin, async (req, res) => {
+  try {
+    const page = parseInt(req.query.page as string) || 1;
+    const perPage = parseInt(req.query.per_page as string) || 20;
+    const offset = (page - 1) * perPage;
+    const result = await db.query(
+       `SELECT c.session_id, MAX(c.timestamp) as timestamp, COUNT(m.id) as msg_count 
+       FROM conversations c 
+       LEFT JOIN messages m ON c.id = m.conversation_id 
+       GROUP BY c.session_id 
+       ORDER BY timestamp DESC 
+       LIMIT $1 OFFSET $2`,
+       [perPage, offset]
+    );
+    res.json(result.rows);
+  } catch(e: any) {
+    res.status(500).json({error: e.message});
+  }
+});
+
+app.get('/api/admin/conversations/:session_id/messages', require_admin, async (req, res) => {
+   try {
+      const sessionId = req.params.session_id;
+      const result = await db.query(
+         `SELECT m.role, m.content, m.timestamp 
+         FROM messages m 
+         JOIN conversations c ON m.conversation_id = c.id 
+         WHERE c.session_id = $1 
+         ORDER BY m.timestamp ASC`,
+         [sessionId]
+      );
+      res.json(result.rows);
+   } catch(e: any) {
+      res.status(500).json({error: e.message});
+   }
+});
+
+app.get('/api/admin/handoffs', require_admin, async (req, res) => {
+    try {
+        const result = await db.query('SELECT id, session_id, triggered_at, status FROM handoff_logs ORDER BY triggered_at DESC');
+        res.json(result.rows);
+    } catch(e: any) {
+        res.status(500).json({error: e.message});
+    }
+});
+
+app.patch('/api/admin/handoff/:id', require_admin, async (req, res) => {
+    try {
+        const { status } = req.body;
+        await db.query('UPDATE handoff_logs SET status = $1 WHERE id = $2', [status, req.params.id]);
+        res.json({success: true});
+    } catch(e: any) {
+        res.status(500).json({error: e.message});
+    }
+});
+
+app.get('/api/admin/feedback', require_admin, async (req, res) => {
+    try {
+        const result = await db.query('SELECT id, session_id, rating, message_content, created_at FROM feedback ORDER BY created_at DESC');
+        res.json(result.rows);
+    } catch(e: any) {
+        res.status(500).json({error: e.message});
+    }
+});
+
