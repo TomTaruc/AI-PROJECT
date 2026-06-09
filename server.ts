@@ -246,6 +246,9 @@ async function require_user(req: express.Request, res: express.Response, next: e
 async function require_admin(req: express.Request, res: express.Response, next: express.NextFunction) {
   const user = await get_current_user(req.cookies['dolphi_admin_session']);
   if (!user || (user as any).role !== 'admin') {
+    if (req.path.startsWith('/api/')) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
     return res.redirect('/admin/login');
   }
   (req as any).user = user;
@@ -315,88 +318,7 @@ function get_small_talk_response(message: string): string {
   return "Hi there! How can I help you today? Feel free to ask me anything about our documents and I will do my best to find the answer for you.";
 }
 
-// Old API auth removed, mapped to HTML routes now
-
-
-
-
-
-
-app.get('/api/admin/users', require_admin, async (req, res) => {
-  try {
-    const result = await db.query('SELECT u.id, u.username, u.email, u.role, u.created_at, u.used_access_code, u.last_login, u.is_active, u.created_by, (SELECT COUNT(m.id) FROM messages m JOIN conversations c ON m.conversation_id = c.id WHERE c.session_id IN (SELECT session_token FROM user_sessions WHERE user_id = u.id)) as message_count FROM users u ORDER BY u.created_at DESC');
-    res.json(result.rows);
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.get('/api/admin/settings', require_admin, async (req, res) => {
-  try {
-    const code = process.env.ADMIN_ACCESS_CODE || '';
-    const maskedCode = code.length > 4 ? '*'.repeat(12) + code.slice(-4) : '*'.repeat(16);
-    res.json({
-       adminAccessCode: maskedCode,
-       baseUrl: process.env.BASE_URL || ''
-    });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.post('/api/admin/users/create', require_admin, async (req, res) => {
-  try {
-    const { username, email, full_name, role, password } = req.body;
-    if (!username || !email || !password) return res.status(400).json({ error: 'missing fields' });
-    if (role !== 'admin' && role !== 'user') return res.status(400).json({ error: 'invalid role' });
-    const pHash = await bcrypt.hash(password, 10);
-    const createdBy = (req as any).user.id;
-    await db.query(
-      "INSERT INTO users (username, email, password_hash, role, created_by, email_verified) VALUES ($1, $2, $3, $4, $5, true)",
-      [username, email, pHash, role, createdBy]
-    );
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.patch('/api/admin/users/:id', require_admin, async (req, res) => {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    const { role, is_active, password } = req.body;
-    if (role && role !== 'admin' && role !== 'user') return res.status(400).json({ error: 'invalid role' });
-    if (role) await db.query("UPDATE users SET role = $1 WHERE id = $2", [role, userId]);
-    if (typeof is_active === 'boolean') await db.query("UPDATE users SET is_active = $1 WHERE id = $2", [is_active, userId]);
-    if (password) {
-      const pHash = await bcrypt.hash(password, 10);
-      await db.query("UPDATE users SET password_hash = $1 WHERE id = $2", [pHash, userId]);
-    }
-    res.json({ success: true });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-app.patch('/api/admin/users/:id/deactivate', require_admin, async (req, res) => {
-  try {
-    const userId = parseInt(req.params.id, 10);
-    const loggedInId = (req as any).user.id;
-    if (userId === loggedInId) return res.status(400).json({ error: 'You cannot deactivate your own account' });
-    
-    // Toggle active status since the prompt says "If the user is already inactive the button must read ACTIVATE instead and reactivate the account"
-    const uRes = await db.query("SELECT is_active FROM users WHERE id = $1", [userId]);
-    if (uRes.rows.length === 0) return res.status(404).json({ error: 'User not found' });
-    
-    const newStatus = !(uRes.rows[0] as any).is_active;
-    await db.query("UPDATE users SET is_active = $1 WHERE id = $2", [newStatus, userId]);
-    res.json({ success: true, is_active: newStatus });
-  } catch (e: any) {
-    res.status(500).json({ error: e.message });
-  }
-});
-
-
+// Admin API endpoints
 app.get('/api/admin/stats', require_admin, async (req, res) => {
   try {
     const msgsTodayRes = await db.query("SELECT COUNT(*) as count FROM messages WHERE DATE(timestamp) = CURRENT_DATE");
@@ -421,7 +343,8 @@ app.get('/api/admin/stats', require_admin, async (req, res) => {
       average_confidence: parseFloat(averageConfidence.toFixed(1)),
       escalation_rate: parseFloat(escalationRate.toFixed(1))
     });
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Admin endpoint error', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -430,26 +353,34 @@ app.get('/api/admin/stats', require_admin, async (req, res) => {
 app.get('/api/admin/users', require_admin, async (req, res) => {
     try {
         const result = await db.query(`
-            SELECT u.id, u.username, u.email, u.role, u.created_at, u.last_login, u.is_active, u.used_access_code,
+            SELECT u.id, u.username, u.email, u.role, u.full_name, u.created_at, u.last_login, u.is_active, u.used_access_code,
             (SELECT COUNT(*) FROM user_sessions s WHERE s.user_id = u.id) as message_count
             FROM users u
             ORDER BY u.created_at DESC
         `);
         res.json(result.rows);
-    } catch(err) { res.status(500).json({ error: err.message }); }
+    } catch(err: any) {
+        console.error('Admin endpoint error', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.patch('/api/admin/users/:id', require_admin, async (req, res) => {
     try {
-        const { role, password } = req.body;
+        const userId = parseInt(req.params.id, 10);
+        const { role, is_active, password } = req.body;
+        if (role && role !== 'admin' && role !== 'user') return res.status(400).json({ error: 'invalid role' });
+        if (role) await db.query("UPDATE users SET role = $1 WHERE id = $2", [role, userId]);
+        if (typeof is_active === 'boolean') await db.query("UPDATE users SET is_active = $1 WHERE id = $2", [is_active, userId]);
         if (password) {
-            const hash = await bcrypt.hash(password, 10);
-            await db.query("UPDATE users SET role = $1, password_hash = $2 WHERE id = $3", [role, hash, req.params.id]);
-        } else {
-            await db.query("UPDATE users SET role = $1 WHERE id = $2", [role, req.params.id]);
+            const pHash = await bcrypt.hash(password, 10);
+            await db.query("UPDATE users SET password_hash = $1 WHERE id = $2", [pHash, userId]);
         }
         res.json({ success: true });
-    } catch(err) { res.status(500).json({ error: err.message }); }
+    } catch(err: any) {
+        console.error('Admin endpoint error', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.patch('/api/admin/users/:id/deactivate', require_admin, async (req, res) => {
@@ -458,19 +389,26 @@ app.patch('/api/admin/users/:id/deactivate', require_admin, async (req, res) => 
         if (targetId === (req as any).user.id) return res.status(400).json({ error: "Cannot deactivate yourself" });
         await db.query("UPDATE users SET is_active = NOT is_active WHERE id = $1", [targetId]);
         res.json({ success: true });
-    } catch(err) { res.status(500).json({ error: err.message }); }
+    } catch(err: any) {
+        console.error('Admin endpoint error', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 app.post('/api/admin/users/create', require_admin, async (req, res) => {
     try {
-        const { username, email, password } = req.body;
+        const { username, email, full_name, password, role } = req.body;
+        const validRole = (role === 'admin' || role === 'user') ? role : 'user';
         const hash = await bcrypt.hash(password, 10);
         await db.query(`
-            INSERT INTO users (username, email, password_hash, created_by)
-            VALUES ($1, $2, $3, $4)
-        `, [username, email, hash, (req as any).user.id]);
+            INSERT INTO users (username, email, password_hash, full_name, role, created_by, email_verified)
+            VALUES ($1, $2, $3, $4, $5, $6, true)
+        `, [username, email, hash, full_name || null, validRole, (req as any).user.id]);
         res.json({ success: true });
-    } catch(err) { res.status(500).json({ error: err.message }); }
+    } catch(err: any) {
+        console.error('Admin endpoint error', err);
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Conversations
@@ -488,7 +426,10 @@ app.get('/api/admin/conversations', require_admin, async (req, res) => {
             LIMIT $1 OFFSET $2
         `, [perPage, offset]);
         res.json(result.rows);
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 app.get('/api/admin/conversations/:session_id/messages', require_admin, async (req, res) => {
@@ -501,7 +442,10 @@ app.get('/api/admin/conversations/:session_id/messages', require_admin, async (r
             ORDER BY m.timestamp ASC
         `, [req.params.session_id]);
         res.json(result.rows);
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 // Handoffs
@@ -509,7 +453,10 @@ app.get('/api/admin/handoffs', require_admin, async (req, res) => {
     try {
         const result = await db.query('SELECT id, session_id, triggered_at, status FROM handoff_logs ORDER BY triggered_at DESC');
         res.json(result.rows);
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 app.patch('/api/admin/handoff/:id', require_admin, async (req, res) => {
@@ -517,7 +464,10 @@ app.patch('/api/admin/handoff/:id', require_admin, async (req, res) => {
         const { status } = req.body;
         const result = await db.query('UPDATE handoff_logs SET status = $1 WHERE id = $2 RETURNING *', [status, req.params.id]);
         res.json(result.rows[0]);
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 // Feedback
@@ -525,17 +475,25 @@ app.get('/api/admin/feedback', require_admin, async (req, res) => {
     try {
         const result = await db.query('SELECT id, session_id, rating, message AS message_content, created_at FROM feedback ORDER BY created_at DESC');
         res.json(result.rows);
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 // Settings
 app.get('/api/admin/settings', require_admin, async (req, res) => {
     try {
+        const code = process.env.ADMIN_ACCESS_CODE || '';
+        const maskedCode = code.length > 4 ? '*'.repeat(12) + code.slice(-4) : '*'.repeat(16);
         res.json({
-            masked_access_code: '****-****-****',
+            masked_access_code: maskedCode,
             base_url: process.env.BASE_URL || 'http://localhost:3000'
         });
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 // Pipeline (Fake implementation of TFIDF logic since we are in Node)
@@ -552,7 +510,8 @@ app.get('/api/admin/pipeline-status', require_admin, async (req, res) => {
             confidence_threshold: CONFIDENCE_THRESHOLD,
             last_ingestion: new Date().toISOString()
         });
-    } catch(e) {
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
         // if chunks doesn't exist just return 0
         res.json({
             total_chunks: 0,
@@ -574,7 +533,10 @@ app.post('/api/admin/rebuild-index', require_admin, async (req, res) => {
             chunkCount = parseInt((chkRes.rows[0] as any).count, 10);
         } catch(e){}
         res.json({ status: 'success', chunks_processed: chunkCount });
-    } catch(e) { res.status(500).json({error: e.message}); }
+    } catch(e: any) {
+        console.error('Admin endpoint error', e);
+        res.status(500).json({error: e.message});
+    }
 });
 
 // Documents 
@@ -591,6 +553,7 @@ app.get('/api/documents', require_admin, async (req, res) => {
     res.json(result.rows);
   } catch (err: any) {
     if (err.message.includes('relation "documents" does not exist')) return res.json([]);
+    console.error('Admin endpoint error', err);
     res.status(500).json({ error: err.message });
   }
 });
@@ -863,6 +826,11 @@ async function startServer() {
   const finalPort = 3000;
 
   // Add the routes before Vite routing
+  app.get('/admin/test', (req, res) => {
+    const testHtml = fs.readFileSync(path.join(process.cwd(), 'admin', 'admin_test.html'), 'utf-8');
+    res.send(testHtml);
+  });
+
   app.get('/admin', require_admin, (req, res) => {
     // We update the response to include the logged in admin UI updates later directly or let the frontend fetch via /api/admin/me
     const adminHtml = fs.readFileSync(path.join(process.cwd(), 'admin', 'admin.html'), 'utf-8');

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>NAV TEST</title>
+<style>
+body { display: flex; height: 100vh; margin: 0; font-family: sans-serif; }
+.sidebar { width: 220px; background: #1A3A5C; padding: 20px 0; }
+.nav-item { padding: 14px 20px; color: rgba(255,255,255,0.7); cursor: pointer; border-left: 3px solid transparent; }
+.nav-item:hover { background: rgba(255,255,255,0.1); color: white; }
+.nav-item.active { background: rgba(255,255,255,0.15); color: white; border-left-color: #F5C518; }
+.main { flex: 1; padding: 32px; background: #F8FAFC; }
+.section { display: none; }
+.section.visible { display: block; }
+h2 { color: #1A3A5C; }
+</style>
+</head>
+<body>
+
+<div class="sidebar" id="sidebar">
+  <div class="nav-item" data-target="s1">Dashboard</div>
+  <div class="nav-item" data-target="s2">Users</div>
+  <div class="nav-item" data-target="s3">Settings</div>
+</div>
+
+<div class="main">
+  <div class="section visible" id="s1"><h2>Dashboard</h2><p>Dashboard content here.</p></div>
+  <div class="section" id="s2"><h2>Users</h2><p>Users content here.</p></div>
+  <div class="section" id="s3"><h2>Settings</h2><p>Settings content here.</p></div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('TEST: DOM ready');
+  
+  var sidebar = document.getElementById('sidebar');
+  console.log('TEST: Sidebar found:', sidebar !== null);
+  
+  var items = sidebar.querySelectorAll('.nav-item');
+  console.log('TEST: Nav items found:', items.length);
+  
+  sidebar.addEventListener('click', function(e) {
+    var item = e.target.closest('.nav-item');
+    if (!item) return;
+    
+    var targetId = item.dataset.target;
+    console.log('TEST: Clicked nav item, target:', targetId);
+    
+    items.forEach(function(n) { n.classList.remove('active'); });
+    item.classList.add('active');
+    
+    document.querySelectorAll('.section').forEach(function(s) {
+      s.classList.remove('visible');
+    });
+    
+    var target = document.getElementById(targetId);
+    if (target) {
+      target.classList.add('visible');
+      console.log('TEST: Showed section:', targetId);
+    } else {
+      console.error('TEST: Section not found:', targetId);
+    }
+  });
+  
+  items[0].classList.add('active');
+  console.log('TEST: Initialization complete');
+});
+</script>
+</body>
+</html>
